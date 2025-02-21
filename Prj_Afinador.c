@@ -20,27 +20,26 @@
 //
 // ====================================================================================================
 
-// Configurações
 #define ADC_PICO 26
 #define MIC_CHANNEL 2
 #define MIC_PIN (ADC_PICO + MIC_CHANNEL)
-#define SAMPLES 1024                  // Mais amostras = melhor resolução
-#define SAMPLE_RATE 4000              // 4 kHz (ajuste conforme necessário)
-#define AMPLIFICATION_FACTOR 10.0f    // Amplificação software (se necessário)
+#define SAMPLES 1024                  
+#define SAMPLE_RATE 4000              
+#define AMPLIFICATION_FACTOR 10.0f    
 #define TOLERANCIA_AFINADOR 0.5f
 #define LED_PIN 7
 #define LED_COUNT 25
 
-// I2C e Display
+
 #define I2C_SDA 14
 #define I2C_SCL 15
 #define SSD1306_BUFFER_LENGTH (ssd1306_width * ssd1306_n_pages)
 
-// Botões
+
 #define BTN_B 6
 #define BTN_A 5
 
-// Configurações do joystick
+
 #define JSK_X_CHANNEL 1
 #define JSK_Y_CHANNEL 0
 #define JSK_X_PIN (ADC_PICO + JSK_X_CHANNEL)
@@ -57,7 +56,7 @@
 //
 // ====================================================================================================
 
-// Buffers
+
 float samples[SAMPLES];
 char str[20];
 float effective_sample_rate = SAMPLE_RATE;
@@ -66,18 +65,16 @@ float referencia = REF_FREQ;
 
 uint8_t luminosidade_display = 0;
 
-// Estrutura para pixels
+
 typedef struct pixel_t {
     uint8_t G, R, B;
 } npLED_t;
 
-// Variáveis globais
+
 npLED_t leds[LED_COUNT];
 PIO np_pio;
 uint sm;
-const uint8_t luminosidade[5] = {128,64,32,16,254}; // ordenado do menor para maior brilho
-
-//const char* notas[] = { "A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#" };
+const uint8_t luminosidade[5] = {128,64,32,16,254}; 
 
 const uint8_t NOTE_PATTERNS[12][25] = {
     // A
@@ -165,7 +162,7 @@ uint map(uint entrada, uint in_min, uint in_max, uint out_min, uint out_max){
 // ====================================================================================================
 
 void init_adc(){
-    adc_init();       // Inicializa o ADC
+    adc_init();       
 
     adc_gpio_init(MIC_PIN);
     adc_gpio_init(JSK_X_PIN);
@@ -176,21 +173,21 @@ void init_adc(){
 }
 
 void init_matriz_led(uint pin) {
-    // Cria programa PIO.
+   
     uint offset = pio_add_program(pio0, &ws2818b_program);
     np_pio = pio0;
 
-    // Toma posse de uma máquina PIO.
+    
     sm = pio_claim_unused_sm(np_pio, false);
     if (sm < 0) {
         np_pio = pio1;
         sm = pio_claim_unused_sm(np_pio, true); // Se nenhuma máquina estiver livre, panic!
     }
 
-    // Inicia programa na máquina PIO obtida.
+    
     ws2818b_program_init(np_pio, sm, offset, pin, 800000.f);
 
-    // Limpa buffer de pixels.
+    
     for (uint i = 0; i < LED_COUNT; ++i) {
         leds[i].R = 0;
         leds[i].G = 0;
@@ -199,14 +196,14 @@ void init_matriz_led(uint pin) {
 }
 
 void init_i2c(){
-    // Inicialização do i2c
+   
     i2c_init(i2c1, ssd1306_i2c_clock * 1000);
     gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);
     gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);
     gpio_pull_up(I2C_SDA);
     gpio_pull_up(I2C_SCL);
 
-    // Processo de inicialização completo do OLED SSD1306
+  
     ssd1306_init();
 }
 
@@ -230,7 +227,7 @@ void set_matriz_led(const uint index, const uint8_t r, const uint8_t g, const ui
 }
 
 void write_matriz_led() {
-    // Escreve cada dado de 8-bits dos pixels em sequência no buffer da máquina PIO.
+    
     for (uint i = 0; i < LED_COUNT; ++i) {
         pio_sm_put_blocking(np_pio, sm, leds[i].G);
         pio_sm_put_blocking(np_pio, sm, leds[i].R);
@@ -246,7 +243,7 @@ void clear_matriz_led() {
 }
 
 void applyLedTransformations(uint8_t *pattern) {
-    // Inverte colunas nas linhas ímpares
+    
     for(int row = 5; row >=0; row = row-=2) {
         for(int col = 0; col < 2; col++) {
             int idx1 = row * 5 + col;
@@ -265,7 +262,7 @@ void applyLedTransformations(uint8_t *pattern) {
 }
 
 void display_indicador_afinacao(float diff){
-    // clear_matriz_esq();
+
     if(diff <= TOLERANCIA_AFINADOR && diff >= -TOLERANCIA_AFINADOR)
         set_matriz_led(14,0,luminosidade[luminosidade_display],0);
     
@@ -307,15 +304,12 @@ void display_nota(uint8_t index, uint8_t intensidade, float diff) {
 void alterar_luminosidade(uint8_t *ssd, struct render_area *frame_area){
     adc_select_input(JSK_Y_CHANNEL);
     
-    // Limpa o display
     memset(ssd, 0, ssd1306_buffer_length);
     render_on_display(ssd, frame_area);
     while(1){
         if(!gpio_get(BTN_A) || !gpio_get(BTN_B))
             break;
 
-
-        
         uint aux = adc_read();
         aux = map(aux,0,4095,0,100);
 
@@ -335,21 +329,17 @@ void alterar_luminosidade(uint8_t *ssd, struct render_area *frame_area){
 
         sleep_ms(50);
 
-        // Converte o contador para string
         snprintf(str, sizeof(str), "Luminosidade %d ", luminosidade_display+1);
 
-        // Desenha a string do contador no display
         ssd1306_draw_string(ssd, 5, 20, str);
 
-        // Renderiza o buffer no display
+
         render_on_display(ssd, frame_area);
 
         snprintf(str, sizeof(str), "B Voltar");
 
-        // Desenha a string do contador no display
         ssd1306_draw_string(ssd, 5, 40, str);
 
-        // Renderiza o buffer no display
         render_on_display(ssd, frame_area);
 
         set_matriz_led(12,luminosidade[luminosidade_display],luminosidade[luminosidade_display],luminosidade[luminosidade_display]);
@@ -367,7 +357,7 @@ void alterar_luminosidade(uint8_t *ssd, struct render_area *frame_area){
 //
 // ====================================================================================================
 
-// Janela de Blackman-Nuttall para redução de leakage
+// Janela de Blackman-Nuttall 
 void aplica_janela(float *sample) {
     for (int i = 0; i < SAMPLES; i++) {
         float a0 = 0.3635819;
@@ -388,8 +378,8 @@ void coleta_audio(float *sample) {
     adc_select_input(MIC_CHANNEL);
 
     for (int i = 0; i < SAMPLES; i++) {
-        sample[i] = (float) adc_read() - 2048.0f;  // Remove offset DC (ADC de 12 bits)
-        sample[i] *= AMPLIFICATION_FACTOR;        // Amplificação em software
+        sample[i] = (float) adc_read() - 2048.0f;  
+        sample[i] *= AMPLIFICATION_FACTOR;        // Amplificação do sinal
         soma += sample[i];
         sleep_us(1000000 / SAMPLE_RATE);
     }
@@ -421,7 +411,7 @@ float calculo_frequencia() {
 
     int max_index = 0;
     float max_mag = 0;
-    float threshold = 100.0f;  // Ignorar ruído de fundo
+    float threshold = 100.0f;  
 
     for (int i = 1; i < SAMPLES / 2; i++) {
         float mag = sqrtf(out[i].r * out[i].r + out[i].i * out[i].i);
@@ -435,7 +425,7 @@ float calculo_frequencia() {
 }
 
 /*
-// Função para calcular a frequência usando Zero-Crossing
+// Zero-Crossing (testado e não utilizado)
 float calculate_frequency(uint16_t *buffer, uint32_t sample_rate) {
     uint32_t crossings = 0;
     for (int i = 1; i < BUFFER_SIZE; i++) {
@@ -454,19 +444,15 @@ float calculate_frequency(uint16_t *buffer, uint32_t sample_rate) {
 */
 
 float identificar_nota(float freq_medida, float ref_freq, uint8_t *indice) {
-    // Calcula a diferença em semitons
+
     float semitons = 12.0 * log2(freq_medida / ref_freq);
 
-    // Arredonda para o semitom mais próximo
     int semitom_arredondado = round(semitons);
 
-    // Determina o índice correto na escala (garante valor positivo 0-11)
     *indice = ((semitom_arredondado % 12) + 12) % 12;
 
-    // Calcula a frequência da nota teórica mais próxima
     float nota_freq = ref_freq * powf(2.0, semitom_arredondado / 12.0);
 
-    // Retorna a diferença em Hz (positivo = agudo, negativo = grave)
     return freq_medida - nota_freq;
 }
 
@@ -672,7 +658,6 @@ void menu_oled(uint8_t menu, uint8_t *ssd, struct render_area *frame_area) {
             }
         }
 
-        // Verifica BTN_B com debounce
         if (!gpio_get(BTN_B)) {
             sleep_ms(20);
             if (!gpio_get(BTN_B)) {
@@ -716,14 +701,12 @@ int main(){
 
     calculate_render_area_buffer_length(&frame_area);
 
-    // zera o display inteiro
     uint8_t ssd[ssd1306_buffer_length];
     memset(ssd, 0, ssd1306_buffer_length);
     render_on_display(ssd, &frame_area);
 
     static uint menu = 0;
 
-    // afinador(ssd,&frame_area);
     menu_oled(menu,ssd,&frame_area);
 
     return 0;
